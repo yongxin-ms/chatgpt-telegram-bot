@@ -36,11 +36,18 @@ class OpenAIHelper:
         Initializes the OpenAI helper class with the given configuration.
         :param config: A dictionary containing the GPT configuration
         """
+        if config['api_type'] is not None:
+            openai.api_version = config['api_version']
+            openai.api_base = config['api_base']
+            openai.api_type = config['api_type']
+
         openai.api_key = config['api_key']
         openai.proxy = config['proxy']
+        self.deployment_id = config['deployment_id']
         self.config = config
         self.conversations: dict[int: list] = {}  # {chat_id: history}
-        self.last_updated: dict[int: datetime] = {}  # {chat_id: last_update_timestamp}
+        # {chat_id: last_update_timestamp}
+        self.last_updated: dict[int: datetime] = {}
 
     def get_conversation_stats(self, chat_id: int) -> tuple[int, int]:
         """
@@ -66,7 +73,8 @@ class OpenAIHelper:
             for index, choice in enumerate(response.choices):
                 content = choice['message']['content'].strip()
                 if index == 0:
-                    self.__add_to_history(chat_id, role="assistant", content=content)
+                    self.__add_to_history(
+                        chat_id, role="assistant", content=content)
                 answer += f'{index + 1}\u20e3\n'
                 answer += content
                 answer += '\n\n'
@@ -125,22 +133,28 @@ class OpenAIHelper:
 
             # Summarize the chat history if it's too long to avoid excessive token usage
             token_count = self.__count_tokens(self.conversations[chat_id])
-            exceeded_max_tokens = token_count + self.config['max_tokens'] > self.__max_model_tokens()
-            exceeded_max_history_size = len(self.conversations[chat_id]) > self.config['max_history_size']
+            exceeded_max_tokens = token_count + \
+                self.config['max_tokens'] > self.__max_model_tokens()
+            exceeded_max_history_size = len(
+                self.conversations[chat_id]) > self.config['max_history_size']
 
             if exceeded_max_tokens or exceeded_max_history_size:
-                logging.info(f'Chat history for chat ID {chat_id} is too long. Summarising...')
+                logging.info(
+                    f'Chat history for chat ID {chat_id} is too long. Summarising...')
                 try:
                     summary = await self.__summarise(self.conversations[chat_id][:-1])
                     logging.debug(f'Summary: {summary}')
                     self.reset_chat_history(chat_id)
-                    self.__add_to_history(chat_id, role="assistant", content=summary)
+                    self.__add_to_history(
+                        chat_id, role="assistant", content=summary)
                     self.__add_to_history(chat_id, role="user", content=query)
                 except Exception as e:
-                    logging.warning(f'Error while summarising chat history: {str(e)}. Popping elements instead...')
+                    logging.warning(
+                        f'Error while summarising chat history: {str(e)}. Popping elements instead...')
                     self.conversations[chat_id] = self.conversations[chat_id][-self.config['max_history_size']:]
 
             return await openai.ChatCompletion.acreate(
+                deployment_id=self.deployment_id,
                 model=self.config['model'],
                 messages=self.conversations[chat_id],
                 temperature=self.config['temperature'],
@@ -152,7 +166,8 @@ class OpenAIHelper:
             )
 
         except openai.error.RateLimitError as e:
-            raise Exception(f'⚠️ _OpenAI Rate Limit exceeded_ ⚠️\n{str(e)}') from e
+            raise Exception(
+                f'⚠️ _OpenAI Rate Limit exceeded_ ⚠️\n{str(e)}') from e
 
         except openai.error.InvalidRequestError as e:
             raise Exception(f'⚠️ _OpenAI Invalid request_ ⚠️\n{str(e)}') from e
@@ -175,7 +190,8 @@ class OpenAIHelper:
 
             if 'data' not in response or len(response['data']) == 0:
                 logging.error(f'No response from GPT: {str(response)}')
-                raise Exception('⚠️ _An error has occurred_ ⚠️\nPlease try again in a while.')
+                raise Exception(
+                    '⚠️ _An error has occurred_ ⚠️\nPlease try again in a while.')
 
             return response['data'][0]['url'], self.config['image_size']
         except Exception as e:
@@ -230,8 +246,9 @@ class OpenAIHelper:
         :return: The summary
         """
         messages = [
-            { "role": "assistant", "content": "Summarize this conversation in 700 characters or less" },
-            { "role": "user", "content": str(conversation) }
+            {"role": "assistant",
+                "content": "Summarize this conversation in 700 characters or less"},
+            {"role": "user", "content": str(conversation)}
         ]
         response = await openai.ChatCompletion.acreate(
             model=self.config['model'],
@@ -265,13 +282,15 @@ class OpenAIHelper:
             encoding = tiktoken.get_encoding("gpt-3.5-turbo")
 
         if model in GPT_3_MODELS:
-            tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
+            # every message follows <|start|>{role/name}\n{content}<|end|>\n
+            tokens_per_message = 4
             tokens_per_name = -1  # if there's a name, the role is omitted
         elif model in GPT_4_MODELS + GPT_4_32K_MODELS:
             tokens_per_message = 3
             tokens_per_name = 1
         else:
-            raise NotImplementedError(f"""num_tokens_from_messages() is not implemented for model {model}.""")
+            raise NotImplementedError(
+                f"""num_tokens_from_messages() is not implemented for model {model}.""")
         num_tokens = 0
         for message in messages:
             num_tokens += tokens_per_message
@@ -290,11 +309,12 @@ class OpenAIHelper:
         headers = {
             "Authorization": f"Bearer {openai.api_key}"
         }
-        response = requests.get("https://api.openai.com/dashboard/billing/credit_grants", headers=headers)
+        response = requests.get(
+            "https://api.openai.com/dashboard/billing/credit_grants", headers=headers)
         billing_data = json.loads(response.text)
         balance = billing_data["total_available"]
         return balance
-    
+
     def get_billing_current_month(self):
         """Gets billed usage for current month from OpenAI API.
 
@@ -312,7 +332,9 @@ class OpenAIHelper:
             "start_date": first_day,
             "end_date": last_day
         }
-        response = requests.get("https://api.openai.com/dashboard/billing/usage", headers=headers, params=params)
+        response = requests.get(
+            "https://api.openai.com/dashboard/billing/usage", headers=headers, params=params)
         billing_data = json.loads(response.text)
-        usage_month = billing_data["total_usage"] / 100 # convert cent amount to dollars
+        usage_month = billing_data["total_usage"] / \
+            100  # convert cent amount to dollars
         return usage_month

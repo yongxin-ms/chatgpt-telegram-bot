@@ -19,16 +19,22 @@ def main():
 
     # Check if the required environment variables are set
     required_values = ['TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY']
-    missing_values = [value for value in required_values if os.environ.get(value) is None]
+    missing_values = [
+        value for value in required_values if os.environ.get(value) is None]
     if len(missing_values) > 0:
-        logging.error(f'The following environment values are missing in your .env: {", ".join(missing_values)}')
+        logging.error(
+            f'The following environment values are missing in your .env: {", ".join(missing_values)}')
         exit(1)
 
     # Setup configurations
     model = os.environ.get('OPENAI_MODEL', 'gpt-3.5-turbo')
     max_tokens_default = default_max_tokens(model=model)
     openai_config = {
+        'api_type': os.environ.get('OPENAI_API_TYPE'),
+        'api_version': os.environ.get('OPENAI_API_VERSION'),
+        'api_base': os.environ.get('OPENAI_API_BASE'),
         'api_key': os.environ['OPENAI_API_KEY'],
+        'deployment_id': os.environ.get('DEPLOYMENT_ID'),
         'show_usage': os.environ.get('SHOW_USAGE', 'false').lower() == 'true',
         'stream': os.environ.get('STREAM', 'true').lower() == 'true',
         'proxy': os.environ.get('PROXY', None),
@@ -56,13 +62,14 @@ def main():
         'ignore_group_transcriptions': os.environ.get('IGNORE_GROUP_TRANSCRIPTIONS', 'true').lower() == 'true',
         'group_trigger_keyword': os.environ.get('GROUP_TRIGGER_KEYWORD', ''),
         'token_price': float(os.environ.get('TOKEN_PRICE', 0.002)),
-        'image_prices': [float(i) for i in os.environ.get('IMAGE_PRICES',"0.016,0.018,0.02").split(",")],
+        'image_prices': [float(i) for i in os.environ.get('IMAGE_PRICES', "0.016,0.018,0.02").split(",")],
         'transcription_price': float(os.environ.get('TOKEN_PRICE', 0.002)),
     }
 
     # Setup and run ChatGPT and Telegram bot
     openai_helper = OpenAIHelper(config=openai_config)
-    telegram_bot = ChatGPTTelegramBot(config=telegram_config, openai=openai_helper)
+    telegram_bot = ChatGPTTelegramBot(
+        config=telegram_config, openai=openai_helper)
     telegram_bot.run()
 
 
