@@ -1,12 +1,11 @@
 import datetime
 import logging
-
 import tiktoken
-
 import openai
-
 import requests
 import json
+import time
+
 from datetime import date
 from calendar import monthrange
 
@@ -176,6 +175,9 @@ class OpenAIHelper:
             raise Exception(f'⚠️ _An error has occurred_ ⚠️\n{str(e)}') from e
 
     async def generate_image(self, prompt: str) -> tuple[str, str]:
+        if self.config['api_type'] is not None:
+            return self.azure_generate_image(prompt)
+
         """
         Generates an image from the given prompt using DALL·E model.
         :param prompt: The prompt to send to the model
@@ -196,6 +198,28 @@ class OpenAIHelper:
             return response['data'][0]['url'], self.config['image_size']
         except Exception as e:
             raise Exception(f'⚠️ _An error has occurred_ ⚠️\n{str(e)}') from e
+
+    def azure_generate_image(self, prompt: str) -> tuple[str, str]:
+        api_base = self.config['api_base']
+        api_key = self.config['api_key']
+        api_version = self.config['api_version']
+        url = "{}dalle/text-to-image?api-version={}".format(
+            api_base, api_version)
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
+        body = {
+            "caption": prompt,
+            "resolution": self.config['image_size']
+        }
+        submission = requests.post(url, headers=headers, json=body)
+        operation_location = submission.headers['Operation-Location']
+        retry_after = submission.headers['Retry-after']
+        status = ""
+        while (status != "Succeeded"):
+            time.sleep(int(retry_after))
+            response = requests.get(operation_location, headers=headers)
+            status = response.json()['status']
+        image_url = response.json()['result']['contentUrl']
+        return image_url, self.config['image_size']
 
     async def transcribe(self, filename):
         """
