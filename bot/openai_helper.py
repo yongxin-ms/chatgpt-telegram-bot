@@ -202,7 +202,7 @@ class OpenAIHelper:
     def azure_generate_image(self, prompt: str) -> tuple[str, str]:
         api_base = self.config['api_base']
         api_key = self.config['api_key']
-        api_version = self.config['api_version']
+        api_version = '2022-08-03-preview'
         url = "{}dalle/text-to-image?api-version={}".format(
             api_base, api_version)
         headers = {"api-key": api_key, "Content-Type": "application/json"}
